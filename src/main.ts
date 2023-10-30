@@ -14,6 +14,7 @@ const {
    loadAseprite,
    loadRoot,
    loadSprite,
+   isKeyDown,
    onKeyDown,
    onKeyPress,
    onKeyRelease,
@@ -24,6 +25,8 @@ const {
    body,
    camPos,
    color,
+   debug,
+   destroy,
    fixed,
    go,
    lifespan,
@@ -34,6 +37,7 @@ const {
    sprite,
    text,
    toScreen,
+   wait,
    vec2,
    z,
 } = k;
@@ -53,7 +57,7 @@ const LEVELS = [
       "                                      _                 ?                                       ",
       "                                 _    |                                                         ",
       "                           _     |    |                _                                        ",
-      "       E                   |     |    |   E   E        |                            H           ",
+      "       E                   |     |    |       E        |   E    E                   H           ",
       "================     ===========================================================================",
       "================     ===========================================================================",
    ],
@@ -76,6 +80,83 @@ const LEVELS = [
       "================     ========================================================================",
    ],
 ];
+
+const JUMP_FORCE = 375,
+      SQUASH_FORCE = 175,
+      SQUASH_JUMP_FORCE = 475;
+
+function patrol(distance = 100, speed = 50, dir = 1) {
+   return {
+      id: "patrol",
+      require: ["pos", "area"],
+      startingPos: vec2(0, 0),
+      async add() {
+         await wait(0.01);
+         this.startingPos = this.worldPos();
+         this.onCollide((obj, displacement)=>{
+            if (displacement.isLeft() || displacement.isRight()) {
+               dir = -dir;
+            }
+         });
+      },
+      update() {
+         const diff = this.worldPos().x - this.startingPos.x;
+         if (diff >= distance) dir=-1;
+         else if (diff <= -distance) dir=1;
+         this.move(speed * dir, 0);
+      },
+   };
+}
+
+function enemy() {
+   return {
+      id: "enemy",
+      require: ["pos", "area", "sprite", "patrol"],
+      isAlive: true,
+      update() {},
+      squash() {
+         this.isAlive = false;
+         this.unuse("patrol");
+         this.stop();
+         this.unuse("body");
+         this.frame = 2;
+         this.area.width = 16;
+         this.area.height = 8;
+         this.use(lifespan(0.3, { fade: 0.1 }));
+      },
+   };
+}
+
+function bump(offset = 8, speed = 2, stopAtOrigin = true) {
+   return {
+      id: "bump",
+      require: ["pos"],
+      bumpOffset: offset,
+      speed: speed,
+      bumped: false,
+      origPos: 0,
+      direction: -1,
+      update() {
+         if (this.bumped) {
+            console.log("Bumping");
+            this.pos.y = this.pos.y + this.direction * this.speed;
+            if (this.pos.y < this.origPos - this.bumpOffset) {
+               this.direction = 1;
+            }
+            if (stopAtOrigin && this.pos.y >= this.origPos) {
+               this.bumped = false;
+               this.pos.y = this.origPos;
+               this.direction = -1;
+            }
+         }
+      },
+      bump() {
+         console.log("Bump!", this);
+         this.bumped = true;
+         this.origPos = this.pos.y;
+      },
+   };
+}
 
 loadRoot("sprites/");
 loadAseprite("mario", "Mario.png", "Mario.json");
@@ -127,7 +208,7 @@ const levelConf: LevelOpt = {
          sprite("emptyBox"),
          area(),
          body({isStatic: true}),
-         // bump(),
+         bump(),
          anchor("bot"),
          "emptyBox",
       ],
@@ -135,7 +216,7 @@ const levelConf: LevelOpt = {
          sprite("coin"),
          area(),
          body({isStatic: true}),
-         //bump(64, 8),
+         bump(64, 8),
          offscreen({ destroy: true }),
          lifespan(0.4, { fade: 0.01 }),
          anchor("bot"),
@@ -144,8 +225,8 @@ const levelConf: LevelOpt = {
       M: () => [
          sprite("bigMushy"),
          area(),
-         body({isStatic: true}),
-         //patrol(10000),
+         body(),
+         patrol(5000),
          body(),
          offscreen({ destroy: true }),
          anchor("bot"),
@@ -155,18 +236,18 @@ const levelConf: LevelOpt = {
       _: () => [sprite("pipeTop"), area(), body({isStatic: true}), anchor("bot"), "pipe"],
       E: () => [
          sprite("enemies", { anim: "Walking" }),
-         area(),
-         body({isStatic: true}),
+         area({ shape: new Rect(vec2(0), 16, 16) }),
          body(),
-         //patrol(50),
-         //enemy(),
+         body(),
+         patrol(),
+         enemy(),
          anchor("bot"),
          "badGuy",
       ],
       p: () => [
          sprite("mario"),
-         area(),
-         body({ jumpForce: 375 }),
+         area({ shape: new Rect(vec2(0), 16, 16) }),
+         body({ jumpForce: JUMP_FORCE }),
          //mario(),
          //bump(150, 20, false),
          anchor("bot"),
@@ -176,6 +257,8 @@ const levelConf: LevelOpt = {
 };
 
 setGravity(700);
+
+debug.inspect = !!location.search.match(/\bdebug\b/);
 
 scene("start", () => {
    add([
@@ -236,6 +319,32 @@ scene("game", (levelNumber = 0) => {
          camPos(player.pos.x, currCam.y);
       }
     });
+
+    player.onCollide("badGuy", (baddy, displacement) => {
+      if (!baddy.isAlive) return;
+      if (player.isFalling() && displacement.isBottom()) {
+         baddy.squash();
+         player.jump(isKeyDown('space') ? SQUASH_JUMP_FORCE : SQUASH_FORCE);
+      } else {
+         // Mario has been hurt. Add logic here later...
+      }
+   });
+
+   player.onHeadbutt(obj=>{
+      if (obj.is("questionBox")) {
+         if (obj.is("coinBox")) {
+            console.log("Coin!", obj.pos, obj.pos.sub(0, 16));
+            let coin = level.spawn("c", obj.pos.sub(0, 16));
+            coin.bump();
+         } else if (obj.is("mushyBox")) {
+            level.spawn("M", obj.pos.sub(0, 16));
+         }
+         var pos = obj.pos;
+         // destroy(obj);
+         var box = level.spawn("!", pos);
+         box.bump();
+       }
+   });
 
 });
 
