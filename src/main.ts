@@ -49,15 +49,15 @@ const LEVELS = [
       "      --?--                                                                                     ",
       "                                                                                                ",
       "                                                                                                ",
-      "                                                                                                ",
+      "                                                                  ?                             ",
       "       ---                                                                                      ",
       "                                                                                                ",
-      "                                                    ?        ?                                  ",
+      "                                                   ?    ?    ?                                  ",
       "                                                                                                ",
-      "      -?-b-                           _                 ?                                       ",
+      "      -?-b-                           _                                                         ",
       "                                 _    |                                                         ",
       "                           _     |    |                _                                        ",
-      "       E                   |     |    |       E        |   E    E                   H           ",
+      "                           |     |    |       E        |   E    E                   H           ",
       "================     ===========================================================================",
       "================     ===========================================================================",
    ],
@@ -125,33 +125,31 @@ function enemy() {
    };
 }
 
-function bump(offset = 8, speed = 2, stopAtOrigin = true) {
+function bump(offset = 8, speed = 3, stopAtOrigin = true) {
    return {
       id: "bump",
       require: ["pos"],
       bumpOffset: offset,
       speed: speed,
       bumped: false,
-      origPos: 0,
+      origY: 0,
       direction: -1,
       update() {
          if (this.bumped) {
-            console.log("Bumping");
-            this.pos.y = this.pos.y + this.direction * this.speed;
-            if (this.pos.y < this.origPos - this.bumpOffset) {
+            this.moveBy(0, this.direction * this.speed);
+            if (this.pos.y < this.origY - this.bumpOffset) {
                this.direction = 1;
             }
-            if (stopAtOrigin && this.pos.y >= this.origPos) {
+            if (stopAtOrigin && this.pos.y >= this.origY) {
                this.bumped = false;
-               this.pos.y = this.origPos;
+               this.moveTo(this.pos.x, this.origY);
                this.direction = -1;
             }
          }
       },
       bump() {
-         console.log("Bump!", this);
+         this.origY = this.pos.y;
          this.bumped = true;
-         this.origPos = this.pos.y;
       },
    };
 }
@@ -179,7 +177,14 @@ const levelConf: LevelOpt = {
    pos: vec2(0, 0),
    tiles: {
       "=": () => [sprite("ground"), area(), body({isStatic: true}), anchor("bot"), "ground"],
-      "-": () => [sprite("brick"), area(), body({isStatic: true}), anchor("bot"), "brick"],
+      "-": () => [
+         sprite("brick"),
+         area(),
+         body({isStatic: true}),
+         anchor("bot"),
+         bump(),
+         "brick"
+      ],
       H: () => [
          sprite("castle"),
          area(),
@@ -214,9 +219,9 @@ const levelConf: LevelOpt = {
          sprite("coin"),
          area(),
          body({isStatic: true}),
-         bump(64, 8),
+         bump(42, 7),
          offscreen({ destroy: true }),
-         lifespan(0.4, { fade: 0.01 }),
+         lifespan(0.25, { fade: 0.1 }),
          anchor("bot"),
          "coin",
       ],
@@ -260,15 +265,14 @@ debug.inspect = !!location.search.match(/\bdebug\b/);
 
 scene("start", () => {
    add([
-      text("Press enter to start", { size: 24 }),
+      text("Press enter to start", { size: 18 }),
       pos(vec2(160, 120)),
       anchor("center"),
       color(255, 255, 255),
    ]);
 
-   onKeyRelease("enter", () => {
-      go("game");
-   });
+   onKeyRelease("enter", ()=>go("game"));
+   onKeyRelease("space", ()=>go("game"));
 });
 
 scene("game", (levelNumber = 0) => {
@@ -282,7 +286,7 @@ scene("game", (levelNumber = 0) => {
    bg.add([sprite("hill"), pos(32, 208), anchor("bot")]);
    bg.add([sprite("shrubbery"), pos(200, 208), anchor("bot")]);
    ui.add([
-      text("Level " + (levelNumber + 1), { size: 24 }),
+      text("Level " + (levelNumber + 1), { size: 18 }),
       pos(vec2(160, 120)),
       color(255, 255, 255),
       anchor("center"),
@@ -328,18 +332,23 @@ scene("game", (levelNumber = 0) => {
       }
    });
 
-   player.onHeadbutt(obj=>{
+   player.onHeadbutt(async obj=>{
+      // If brick, just bump and do nothing
+      if (obj.is("brick")) {
+         obj.bump();
+         return;
+      }
+      // If question, we have to convert it and pop out what's inside
       if (obj.is("questionBox")) {
          if (obj.is("coinBox")) {
-            console.log("Coin!", obj.pos, obj.pos.sub(0, 16));
-            let coin = level.spawn("c", obj.pos.sub(0, 16));
+            let coin = level.spawn("c", level.pos2Tile(obj.pos).sub(0, 1));
             coin.bump();
          } else if (obj.is("mushyBox")) {
-            level.spawn("M", obj.pos.sub(0, 16));
+            level.spawn("M", level.pos2Tile(obj.pos).sub(0, 1));
          }
-         var pos = obj.pos;
-         // destroy(obj);
-         var box = level.spawn("!", pos);
+         var pos = obj.pos.clone();
+         destroy(obj);
+         var box = level.spawn("!", level.pos2Tile(pos));
          box.bump();
        }
    });
