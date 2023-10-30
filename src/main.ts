@@ -46,15 +46,15 @@ const LEVELS = [
    [
       "                                                                                                ",
       "                                                                                                ",
+      "      --?--                                                                                     ",
       "                                                                                                ",
       "                                                                                                ",
       "                                                                                                ",
+      "       ---                                                                                      ",
       "                                                                                                ",
-      "                                                                                                ",
-      "      -?-b-                                                                                     ",
       "                                                    ?        ?                                  ",
       "                                                                                                ",
-      "                                      _                 ?                                       ",
+      "      -?-b-                           _                 ?                                       ",
       "                                 _    |                                                         ",
       "                           _     |    |                _                                        ",
       "       E                   |     |    |       E        |   E    E                   H           ",
@@ -81,9 +81,9 @@ const LEVELS = [
    ],
 ];
 
-const JUMP_FORCE = 375,
-      SQUASH_FORCE = 175,
-      SQUASH_JUMP_FORCE = 475;
+const JUMP_FORCE = 315,
+      SQUASH_FORCE = 144,
+      SQUASH_JUMP_MULTIPLIER = 1.3;
 
 function patrol(distance = 100, speed = 50, dir = 1) {
    return {
@@ -120,8 +120,6 @@ function enemy() {
          this.stop();
          this.unuse("body");
          this.frame = 2;
-         this.area.width = 16;
-         this.area.height = 8;
          this.use(lifespan(0.3, { fade: 0.1 }));
       },
    };
@@ -324,7 +322,7 @@ scene("game", (levelNumber = 0) => {
       if (!baddy.isAlive) return;
       if (player.isFalling() && displacement.isBottom()) {
          baddy.squash();
-         player.jump(isKeyDown('space') ? SQUASH_JUMP_FORCE : SQUASH_FORCE);
+         player.jump(isKeyDown('space') ? JUMP_FORCE * SQUASH_JUMP_MULTIPLIER : SQUASH_FORCE);
       } else {
          // Mario has been hurt. Add logic here later...
       }
