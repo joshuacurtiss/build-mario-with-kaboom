@@ -76,7 +76,7 @@ const LEVELS = [
       "                                                                                             ",
       "                                                                                             ",
       "       _                                            _                                        ",
-      "       |                                            |          E    E            H           ",
+      "       |                            E     E         |          E    E            H           ",
       "================     ========================================================================",
       "================     ========================================================================",
    ],
@@ -252,7 +252,7 @@ const levelConf: LevelOpt = {
       ],
       H: () => [
          sprite("castle"),
-         area(),
+         area({ shape: new Rect(vec2(0), 8, 240) }),
          anchor("bot"),
          "castle",
       ],
@@ -411,6 +411,24 @@ scene("game", (levelNumber = 0) => {
    player.onCollide("bigMushy", (mushy) => {
       destroy(mushy);
       player.bigger();
+   });
+
+   player.onCollide("castle", () => {
+      player.freeze();
+      ui.add([
+         text("Well Done!", { size: 24 }),
+         pos(vec2(160, 120)),
+         color(255, 255, 255),
+         anchor("center"),
+      ]);
+      wait(1, () => {
+         let nextLevel = levelNumber + 1;
+         if (nextLevel >= LEVELS.length) {
+            go("start");
+         } else {
+            go("game", nextLevel);
+         }
+      });
    });
 
    player.onHeadbutt(async obj=>{
