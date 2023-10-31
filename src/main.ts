@@ -29,6 +29,7 @@ const {
    destroy,
    fixed,
    go,
+   height,
    lifespan,
    offscreen,
    pos,
@@ -57,7 +58,7 @@ const LEVELS = [
       "      -?-b-                           _                                                         ",
       "                                 _    |                                                         ",
       "                           _     |    |                _                                        ",
-      "                           |     |    |       E        |   E    E                   H           ",
+      "        E                  |     |    |       E        |   E    E                   H           ",
       "================     ===========================================================================",
       "================     ===========================================================================",
    ],
@@ -84,6 +85,70 @@ const LEVELS = [
 const JUMP_FORCE = 315,
       SQUASH_FORCE = 144,
       SQUASH_JUMP_MULTIPLIER = 1.3;
+
+function mario() {
+   return {
+      id: "mario",
+      require: ["body", "area", "sprite", "bump"],
+      smallAnimation: "Running",
+      bigAnimation: "RunningBig",
+      smallStopFrame: 0,
+      bigStopFrame: 8,
+      smallJumpFrame: 5,
+      bigJumpFrame: 13,
+      isBig: false,
+      isFrozen: false,
+      isAlive: true,
+      update() {
+         if (this.isFrozen) {
+            this.standing();
+            return;
+         }
+
+         if (!this.isGrounded()) {
+            this.jumping();
+         } else {
+            if (isKeyDown("left") || isKeyDown("right")) {
+               this.running();
+            } else {
+               this.standing();
+            }
+         }
+      },
+      bigger() {
+         this.isBig = true;
+         this.area.shape.height = 32;
+      },
+      smaller() {
+         this.isBig = false;
+         this.area.shape.height = 16;
+      },
+      standing() {
+         this.stop();
+         this.frame = this.isBig ? this.bigStopFrame : this.smallStopFrame;
+      },
+      jumping() {
+         this.stop();
+         this.frame = this.isBig ? this.bigJumpFrame : this.smallJumpFrame;
+      },
+      running() {
+         const animation = this.isBig ? this.bigAnimation : this.smallAnimation;
+         if (this.curAnim() !== animation) {
+         this.play(animation);
+         }
+      },
+      freeze() {
+         this.isFrozen = true;
+      },
+      die() {
+         this.unuse("body");
+         this.bump();
+         this.isAlive = false;
+         this.freeze();
+         this.use(lifespan(1, { fade: 1 }));
+      },
+   };
+}
 
 function patrol(distance = 100, speed = 50, dir = 1) {
    return {
@@ -251,8 +316,8 @@ const levelConf: LevelOpt = {
          sprite("mario"),
          area({ shape: new Rect(vec2(0), 16, 16) }),
          body({ jumpForce: JUMP_FORCE }),
-         //mario(),
-         //bump(150, 20, false),
+         mario(),
+         bump(45, 7, false),
          anchor("bot"),
          "player",
       ],
@@ -290,18 +355,20 @@ scene("game", (levelNumber = 0) => {
       pos(vec2(160, 120)),
       color(255, 255, 255),
       anchor("center"),
-      lifespan(1, { fade: 0.5 }),
+      lifespan(0.6, { fade: 0.5 }),
    ]);
 
    const player = level.spawn("p", 1, 10);
    const SPEED = 120;
 
    onKeyDown("right", () => {
+      if (player.isFrozen) return;
       player.flipX = false;
       player.move(SPEED, 0);
    });
 
    onKeyDown("left", () => {
+      if (player.isFrozen) return;
       player.flipX = true;
       if (toScreen(player.pos).x > 20) {
          player.move(-SPEED, 0);
@@ -309,7 +376,7 @@ scene("game", (levelNumber = 0) => {
    });
 
    onKeyPress("space", () => {
-      if (player.isGrounded()) {
+      if (player.isAlive && player.isGrounded()) {
          player.jump();
       }
    });
@@ -320,16 +387,30 @@ scene("game", (levelNumber = 0) => {
       if (currCam.x < player.pos.x) {
          camPos(player.pos.x, currCam.y);
       }
+      // Check if Mario has fallen off the screen
+      if (player.pos.y > height() + 16) {
+         killed();
+      }
     });
 
     player.onCollide("badGuy", (baddy, displacement) => {
       if (!baddy.isAlive) return;
+      if (!player.isAlive) return;
       if (player.isFalling() && displacement.isBottom()) {
          baddy.squash();
          player.jump(isKeyDown('space') ? JUMP_FORCE * SQUASH_JUMP_MULTIPLIER : SQUASH_FORCE);
       } else {
-         // Mario has been hurt. Add logic here later...
+         if (player.isBig) {
+            player.smaller();
+         } else {
+            killed();
+         }
       }
+   });
+
+   player.onCollide("bigMushy", (mushy) => {
+      destroy(mushy);
+      player.bigger();
    });
 
    player.onHeadbutt(async obj=>{
@@ -352,6 +433,21 @@ scene("game", (levelNumber = 0) => {
          box.bump();
        }
    });
+
+   function killed() {
+      // Mario is dead 😵
+      if (!player.isAlive) return; // Don't run it if mario is already dead
+      player.die();
+      ui.add([
+         text("Game Over!", { size: 18 }),
+         pos(vec2(160, 120)),
+         color(255, 255, 255),
+         anchor("center"),
+      ]);
+      wait(2, () => {
+         go("start");
+      });
+    }
 
 });
 
