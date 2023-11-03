@@ -360,6 +360,7 @@ scene("game", (levelNumber = 0) => {
 
    const player = level.spawn("p", 1, 10);
    const SPEED = 120;
+   let jumping = false;
 
    onKeyDown("right", () => {
       if (player.isFrozen) return;
@@ -375,8 +376,16 @@ scene("game", (levelNumber = 0) => {
       }
    });
 
+   onKeyPress("down", () => {
+      if (player.isAlive && (player.isJumping() || player.isFalling())) {
+         jumping=false;
+         player.jumpRelease(JUMP_FORCE);
+      }
+   });
+
    onKeyPress("space", () => {
       if (player.isAlive && player.isGrounded()) {
+         jumping=true;
          player.jump();
       }
    });
@@ -386,6 +395,13 @@ scene("game", (levelNumber = 0) => {
       var currCam = camPos();
       if (currCam.x < player.pos.x) {
          camPos(player.pos.x, currCam.y);
+      }
+      // Do not do the rest of the checks if the player is not alive
+      if (!player.isAlive) return;
+      // If player is jumping, and you let go of jump key, release the jump
+      if (!isKeyDown('space') && jumping) {
+         jumping=false;
+         player.jumpRelease();
       }
       // Check if Mario has fallen off the screen
       if (player.pos.y > height() + 16) {
