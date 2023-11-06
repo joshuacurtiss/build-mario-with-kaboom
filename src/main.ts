@@ -37,6 +37,7 @@ const {
    setGravity,
    sprite,
    text,
+   time,
    toScreen,
    wait,
    vec2,
@@ -89,13 +90,14 @@ const JUMP_FORCE = 315,
 function mario() {
    return {
       id: "mario",
-      require: ["body", "area", "sprite", "bump"],
+      require: ["body", "area", "sprite", "bump", "color"],
       smallAnimation: "Running",
       bigAnimation: "RunningBig",
       smallStopFrame: 0,
       bigStopFrame: 8,
       smallJumpFrame: 5,
       bigJumpFrame: 13,
+      isInvulnerable: false,
       isBig: false,
       isFrozen: false,
       isAlive: true,
@@ -104,7 +106,11 @@ function mario() {
             this.standing();
             return;
          }
-
+         if (this.isInvulnerable) {
+            this.opacity = Math.floor((time() % 1) * 10) % 2 === 0 ? 0.4 : 0.7;
+         } else {
+            this.opacity = 1.0;
+         }
          if (!this.isGrounded()) {
             this.jumping();
          } else {
@@ -121,7 +127,11 @@ function mario() {
       },
       smaller() {
          this.isBig = false;
+         this.isInvulnerable = true;
          this.area.shape.height = 16;
+         wait(3, ()=>{
+            this.isInvulnerable = false;
+         });
       },
       standing() {
          this.stop();
@@ -317,6 +327,7 @@ const levelConf: LevelOpt = {
          area({ shape: new Rect(vec2(0), 16, 16) }),
          body({ jumpForce: JUMP_FORCE }),
          mario(),
+         color(),
          bump(45, 7, false),
          anchor("bot"),
          "player",
@@ -412,6 +423,7 @@ scene("game", (levelNumber = 0) => {
     player.onCollide("badGuy", (baddy, displacement) => {
       if (!baddy.isAlive) return;
       if (!player.isAlive) return;
+      if (player.isInvulnerable) return;
       if (player.isFalling() && displacement.isBottom()) {
          baddy.squash();
          player.jump(isKeyDown('space') ? JUMP_FORCE * SQUASH_JUMP_MULTIPLIER : SQUASH_FORCE);
