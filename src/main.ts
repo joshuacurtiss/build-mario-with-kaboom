@@ -460,7 +460,12 @@ scene("game", (levelNumber = 0) => {
    player.onHeadbutt(async obj=>{
       // If brick, just bump and do nothing
       if (obj.is("brick")) {
-         obj.bump();
+         // If the player is big, then destroy the brick. Otherwise, bump it
+         if (player.isBig) {
+            destroy(obj);
+         } else {
+            obj.bump();
+         }
          return;
       }
       // If question, we have to convert it and pop out what's inside
