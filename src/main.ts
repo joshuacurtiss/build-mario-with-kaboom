@@ -388,7 +388,7 @@ scene("game", (levelNumber = 0) => {
    onKeyPress("down", () => {
       if (player.isAlive && (player.isJumping() || player.isFalling())) {
          jumping=false;
-         player.jumpRelease(JUMP_FORCE);
+         player.vel.y = JUMP_FORCE;
       }
    });
 
@@ -410,7 +410,9 @@ scene("game", (levelNumber = 0) => {
       // If player is jumping, and you let go of jump key, release the jump
       if (!isKeyDown('space') && jumping) {
          jumping=false;
-         player.jumpRelease();
+         if (!player.isGrounded() && player.vel.y<0) {
+            player.vel.y = player.vel.y * 0.5
+         }
       }
       // Check if Mario has fallen off the screen
       if (player.pos.y > height() + 16) {
